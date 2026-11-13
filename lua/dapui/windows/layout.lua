@@ -24,21 +24,50 @@ local util = require("dapui.util")
 ---@field set_area_size fun(win_id: integer, size: integer)
 local WindowLayout = {}
 
-function WindowLayout:open()
+---Open the layout's windows.
+---Windows start out tiny and layouts opened afterwards can squeeze the ones
+---that are already open. A terminal buffer (e.g. the console) permanently loses
+---text when it is displayed in a window narrower than its content, so callers
+---opening several layouts pass `defer_buffers` and call `attach_buffers` once all
+---windows have their final size.
+---@param defer_buffers? boolean Leave element buffers to `attach_buffers`
+function WindowLayout:open(defer_buffers)
   if self:is_open() then
     return
   end
   local cur_win = api.nvim_get_current_win()
+  self.pending_buffers = {}
   for i, _ in pairs(self.win_states) do
     local get_buffer = self.open_index(i)
     local win_id = api.nvim_get_current_win()
-    api.nvim_set_current_buf(get_buffer())
+    -- Create the buffer now, while the window is still current and before the
+    -- resize below. Some elements (e.g. the REPL) create their buffer by
+    -- briefly opening a window, which would disturb sizes set after it.
+    get_buffer()
     self.opened_wins[i] = win_id
     self:_init_win_settings(win_id)
-    self.win_bufs[win_id] = get_buffer
+    self.pending_buffers[win_id] = get_buffer
   end
   self:resize()
+  if not defer_buffers then
+    self:attach_buffers()
+  end
   -- Fails if cur win was floating that closed
+  pcall(api.nvim_set_current_win, cur_win)
+end
+
+---Show the element buffers in the windows created by `open`
+function WindowLayout:attach_buffers()
+  local cur_win = api.nvim_get_current_win()
+  for win_id, get_buffer in pairs(self.pending_buffers or {}) do
+    if api.nvim_win_is_valid(win_id) then
+      api.nvim_win_call(win_id, function()
+        api.nvim_set_current_buf(get_buffer())
+      end)
+      self.win_bufs[win_id] = get_buffer
+    end
+  end
+  self.pending_buffers = nil
   pcall(api.nvim_set_current_win, cur_win)
 end
 
@@ -162,11 +191,11 @@ function WindowLayout:is_open()
   return false
 end
 
-function WindowLayout:toggle()
+function WindowLayout:toggle(defer_buffers)
   if self:is_open() then
     self:close()
   else
-    self:open()
+    self:open(defer_buffers)
   end
 end
 

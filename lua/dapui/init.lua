@@ -307,18 +307,23 @@ function dapui.open(args)
 
     for i, win_layout in reverse(windows.layouts) do
       if not layout or layout == i then
-        win_layout:open()
+        win_layout:open(true)
       end
     end
 
     if #closed > 0 then
       for _, i in ipairs(closed) do
-        windows.layouts[i]:open()
+        windows.layouts[i]:open(true)
       end
     end
 
     for _, win_layout in ipairs(windows.layouts) do
       win_layout:resize(args)
+    end
+    -- Only show element buffers once every window has its final size, see
+    -- WindowLayout:open
+    for _, win_layout in ipairs(windows.layouts) do
+      win_layout:attach_buffers()
     end
   end)
   dapui.update_render({})
@@ -358,16 +363,21 @@ function dapui.toggle(args)
 
     for i, win_layout in reverse(windows.layouts) do
       if not layout or layout == i then
-        win_layout:toggle()
+        win_layout:toggle(true)
       end
     end
 
     for _, i in reverse(closed) do
-      windows.layouts[i]:open()
+      windows.layouts[i]:open(true)
     end
 
     for _, win_layout in ipairs(windows.layouts) do
       win_layout:resize(args)
+    end
+    -- Only show element buffers once every window has its final size, see
+    -- WindowLayout:open
+    for _, win_layout in ipairs(windows.layouts) do
+      win_layout:attach_buffers()
     end
   end)
   dapui.update_render({})
